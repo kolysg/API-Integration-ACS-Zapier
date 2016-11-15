@@ -16,9 +16,11 @@ var Zap = {
 
     //Sales_Invoice_Pre_Write
     sales_invoice_pre_write: function(bundle) {
+    
         var outbound = JSON.parse(bundle.request.data);
         outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_SalesInvoice_LineItems_RowType)";
-        console.log('TermsKey' + outbound.Terms_Key);
+        //console.log('TermsKey' + outbound.Terms_Key);
+        
         var companyRequest =  {
             'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
                 '/odata/standard.odata/Catalog_Companies?$format=json&$filter=Description eq ' + "'" + bundle.action_fields.Company_Key + "'",
@@ -36,7 +38,23 @@ var Zap = {
         else {
             outbound.Company_Key = "";
         }
-
+        
+        
+        //If sales order Number is not set- optional
+        if (outbound.Number === undefined){
+            var numberRequest =  {
+                'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                    "/odata/standard.odata/Catalog_DocumentNumbering?$format=json&$filter=Description eq 'Sales order'", 
+                'headers': {
+                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                }, 
+                "method": "GET"
+            };
+            var numberResponse = z.request(numberRequest);
+            JSONResponse = JSON.parse(numberResponse.content);
+            outbound.Number = (JSONResponse.value[0].Number) + 1;
+        } 
+        
         
         //Date_default
         var d = new Date();
@@ -233,7 +251,7 @@ var Zap = {
             else{
                 //LineItems               
                 outbound.LineItems[i].LineID = (randomStringGen(8) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(12) );
-                outbound.LineItems[i].LineNumber = i+1;
+                outbound.LineItems[i].LineNumber = (i+1).toString();
                 outbound.LineItems[i].ProductDescription = JSONResponse.value[0].Description;
                 outbound.LineItems[i].Product_Key = JSONResponse.value[0].Ref_Key; //Products
                 outbound.LineItems[i].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unit
@@ -243,8 +261,8 @@ var Zap = {
                 outbound.LineItems[i].DeliveryDateActual = outbound.DeliveryDateActual;
                 //LineTotal & LineSubtotal
                 outbound.LineItems[i].LineTotal = outbound.LineItems[i].PriceUnits * outbound.LineItems[i].QtyUnits; //Total Price
-                outbound.LineSubtotal = outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
-                LinesTotal += outbound.LineSubtotal;
+                outbound.LineSubtotal += outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
+                LinesTotal = outbound.LineSubtotal;
             }
             
               //Unit Request - Default
@@ -351,9 +369,10 @@ var Zap = {
         return results;
     },
     
-//sales order pre_write
+//sales order pre_write**************************************************************************************************************
+    
     sales_order_pre_write: function(bundle) {
-        
+    
         var outbound = JSON.parse(bundle.request.data);
         outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_SalesOrder_LineItems_RowType)"; //include this for lineItems to save it in a separate table
         
@@ -368,6 +387,7 @@ var Zap = {
           };
         var companyResponse = z.request(companyRequest);
         var JSONResponse = JSON.parse(companyResponse.content);
+        //console.log('JSON_COMPANY: ' + companyResponse);
         if (JSONResponse.value.length > 0) {
             outbound.Company_Key = JSONResponse.value[0].Ref_Key;
         }
@@ -386,8 +406,8 @@ var Zap = {
         };
         var projectResponse = z.request(projectRequest);
         JSONResponse = JSON.parse(projectResponse.content);
-        outbound.LineItems[0].Project_Key = JSONResponse.value[0].Ref_Key;
-        outbound.Project_Key = outbound.LineItems[0].Project_Key; 
+        //outbound.LineItems[0].Project_Key = JSONResponse.value[0].Ref_Key;
+        outbound.Project_Key = JSONResponse.Ref_Key; 
         if (outbound.Project_Key === undefined){
             outbound.Project_Key = "00000000-0000-0000-0000-000000000000";
         }
@@ -408,24 +428,7 @@ var Zap = {
             outbound.Class_Key = "00000000-0000-0000-0000-000000000000";
         }
         
-   
-        //if location is not set, use the default
-        if (outbound.Location_Key === undefined) {
-            //console.log(outbound.Location_Key);
-            var locationRequest =  {
-                'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
-                    '/odata/standard.odata/Catalog_Locations?$format=json&$filter=Default eq true', 
-                'headers': {
-                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
-                }, 
-                "method": "GET"
-              };
-            var locationResponse = z.request(locationRequest);
-            JSONResponse = JSON.parse(locationResponse.content);
-            outbound.Location_Key = JSONResponse.value[0].Ref_Key;
-        }
         
-
         //always USD and exchange rate of 1
         var currencyRequest =  {
             'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
@@ -504,12 +507,13 @@ var Zap = {
                 outbound.LineItems[i].Product_Key = JSONResponse.value[0].Ref_Key; //Products
                 outbound.LineItems[i].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unit
                 outbound.LineItems[i].QtyUM = outbound.LineItems[i].QtyUnits; //Quantity
-                outbound.LineItems[i].Location_Key = outbound.Location_Key; // for LineItem's location
-                //outbound.LineItems[i].DeliveryDate = outbound.DeliveryDate;//for delivery date
+                outbound.LineItems[i].Location_Key = outbound.Location_Key;
+                
+                outbound.LineItems[i].DeliveryDate = outbound.DeliveryDate;//for delivery date
                 //LineTotal & LineSubtotal
                 outbound.LineItems[i].LineTotal = outbound.LineItems[i].PriceUnits * outbound.LineItems[i].QtyUnits; //Total Price
-                outbound.LineSubtotal = outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
-                LinesTotal += outbound.LineSubtotal;
+                outbound.LineSubtotal += outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
+                LinesTotal = outbound.LineSubtotal;
             }
             
               //Unit Request - Default
@@ -526,8 +530,29 @@ var Zap = {
             var unitResponse = z.request(unitRequest);
             JSONResponse = JSON.parse(unitResponse.content);
             outbound.LineItems[i].Unit_Key = JSONResponse.DefaultSaleUnit_Key;
+            
+            
+            //if location is not set, use the default- 'SHIP FROM' field
+            /*if (outbound.Location_Key === undefined) {
+
+                var locationRequest =  {
+                    'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                        '/odata/standard.odata/Catalog_Locations?$format=json&$filter=Default eq true', 
+                    'headers': {
+                      "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                    }, 
+                    "method": "GET"
+                  };
+                var locationResponse = z.request(locationRequest);
+                JSONResponse = JSON.parse(locationResponse.content);
+                //outbound.Location_Key = JSONResponse.value[0].Ref_Key;
+                outbound.LineItems[i].Location_Key = JSONResponse.value[0].Ref_Key; // for LineItem's location
+                outbound.Location_Key = outbound.LineItems[i].Location_Key;
+            }*/
+            
 
         }
+        
 
         //if discount or shipping is undefined
         if (outbound.DiscountPercent === undefined){
@@ -552,6 +577,8 @@ var Zap = {
         //Document Total
         outbound.DocumentTotal = Doc_Subtotal + Doc_Discount + outbound.Shipping;
         outbound.DocumentTotalRC = outbound.DocumentTotal;
+        
+         
         
         //error check
         var str = "";
