@@ -238,7 +238,9 @@ var Zap = {
                 outbound.LineItems[i].Product_Key = JSONResponse.value[0].Ref_Key; //Products
                 outbound.LineItems[i].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unit
                 outbound.LineItems[i].QtyUM = outbound.LineItems[i].QtyUnits; //Quantity
-                outbound.LineItems[i].DeliveryDate = outbound.DeliveryDateActual;
+                outbound.LineItems[i].LocationActual_Key = outbound.Location_Key; // for LineItem's location
+                //outbound.LineItems[i].DeliveryDate = outbound.DeliveryDateActual;
+                outbound.LineItems[i].DeliveryDateActual = outbound.DeliveryDateActual;
                 //LineTotal & LineSubtotal
                 outbound.LineItems[i].LineTotal = outbound.LineItems[i].PriceUnits * outbound.LineItems[i].QtyUnits; //Total Price
                 outbound.LineSubtotal = outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
@@ -503,6 +505,7 @@ var Zap = {
                 outbound.LineItems[i].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unit
                 outbound.LineItems[i].QtyUM = outbound.LineItems[i].QtyUnits; //Quantity
                 outbound.LineItems[i].Location_Key = outbound.Location_Key; // for LineItem's location
+                //outbound.LineItems[i].DeliveryDate = outbound.DeliveryDate;//for delivery date
                 //LineTotal & LineSubtotal
                 outbound.LineItems[i].LineTotal = outbound.LineItems[i].PriceUnits * outbound.LineItems[i].QtyUnits; //Total Price
                 outbound.LineSubtotal = outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
