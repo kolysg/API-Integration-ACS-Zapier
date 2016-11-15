@@ -11,7 +11,6 @@ function randomStringGen(len, charSet){
 }
 
 var LineId_Key = (randomStringGen(8) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(12) ); //creates random (8-4-4-4-12 digit) LineID String
-//console.log(LineId_Key);
 
 var Zap = {
 
@@ -35,12 +34,9 @@ var Zap = {
             outbound.Company_Key = JSONResponse.value[0].Ref_Key;
         }
         else {
-            // create a new company
-            //console.log("found no company");
             outbound.Company_Key = "";
         }
-        
-        //console.log(outbound.Company_Key);
+
         
     //Date_default
         var d = new Date();
@@ -86,7 +82,6 @@ var Zap = {
         }
         
         var terms_Days = (Number(JSONResponse.Days));
-        //terms_Days = terms_Days*24*60*60*1000; //in ms
         var adjusted_time = d2.getTime() + terms_Days*24*60*60*1000; //in ms
         console.log("adjusted time: " + adjusted_time);
         var d3 = new Date(adjusted_time);
@@ -110,13 +105,29 @@ var Zap = {
             };
             var addressResponse = z.request(addressRequest);
             JSONResponse = JSON.parse(addressResponse.content);
-            //console.log(JSONResponse);
             outbound.ShipTo_Key = JSONResponse.value[0].Ref_Key;
             outbound.BillTo_Key = JSONResponse.value[0].Ref_Key;//default
         }
+
+
+        //Location
+        //if location is not set, use the default
+        if (outbound.Location_Key === undefined) {
+            var locationRequest =  {
+                'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                    '/odata/standard.odata/Catalog_Locations?$format=json&$filter=Default eq true', 
+                'headers': {
+                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                }, 
+                "method": "GET"
+              };
+            var locationResponse = z.request(locationRequest);
+            JSONResponse = JSON.parse(locationResponse.content);
+            outbound.Location_Key = JSONResponse.value[0].Ref_Key;
+        }
        
         
-     /*  //Sales Person
+        /*  //Sales Person
         var SalesPersonRequest =  {
             'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
                 "/odata/standard.odata/Catalog_SalesPeople(guid'" + outbound.SalesPerson_Key + "')?$format=json", 
@@ -132,6 +143,7 @@ var Zap = {
             outbound.SalesPerson_Key = "";
         }*/
         
+
         //Project Request
         var projectRequest = {
             'url' : "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
@@ -148,6 +160,7 @@ var Zap = {
         if (outbound.Project_Key === undefined){
             outbound.Project_Key = "00000000-0000-0000-0000-000000000000";
         }
+
         
         //Class Request
         var classRequest = {
@@ -164,6 +177,7 @@ var Zap = {
         if (outbound.Class_Key === undefined){
             outbound.Class_Key = "00000000-0000-0000-0000-000000000000";
         }
+
         
         //Shipping Carriers & Tracking#
         var carrierRequest = {
@@ -187,94 +201,11 @@ var Zap = {
         if (outbound.URL === undefined){
             outbound.URL = "";
         }
-        
-        
-       /* //Product Request
-        var productRequest = {
-            'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
-                '/odata/standard.odata/Catalog_Products?$format=json&$filter=Description eq ' + "'" + bundle.action_fields.LineItems[0].Product_Key + "'",
-            'headers' : {
-                "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
-            },
-            'method' : "GET"
-        
-        };
-        //console.log("product Request: " + productRequest);
-        var productResponse = z.request(productRequest);
-        JSONResponse = JSON.parse(productResponse.content);
-        console.log("Product JSON: " + productResponse);
-        if (JSONResponse.value.length === 0){
-            outbound.LineItems[0].Product_Key = "";
-        }
-        else{
-            //LineItems
-            //outbound.LineItems[0].LineID = LineId_Key;
-            outbound.LineItems[0].LineNumber = "1";
-            outbound.LineItems[0].ProductDescription = JSONResponse.value[0].Description;
-            outbound.LineItems[0].Product_Key = JSONResponse.value[0].Ref_Key; //Products
-            outbound.LineItems[0].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unit
-            outbound.LineItems[0].QtyUM = outbound.LineItems[0].QtyUnits; //Quantity
-            outbound.LineItems[0].LineTotal = outbound.LineItems[0].PriceUnits * outbound.LineItems[0].QtyUnits; //Total Price
-            outbound.LineSubtotal = outbound.LineItems[0].LineTotal; //LineTotal = LineItemTotal
-        }*/
-        
 
         //default parameters
         outbound.DiscountType = 'Percent'; //Discount
-        
-        /*if (outbound.DiscountPercent === undefined){
-            outbound.DiscountPercent = 0;
-        }
-        
-        if (outbound.Discount === undefined){
-            outbound.Discount = - (outbound.LineItems[0].LineTotal * (outbound.DiscountPercent / 100));
-        }
-        outbound.SubTotal = (outbound.LineItems[0].LineTotal) + outbound.Discount; //Subtotal = after discount, before shipping
-        if (outbound.Shipping === undefined){
-            outbound.Shipping = 0;
-        }
-        
-        outbound.DocumentTotal = (outbound.LineItems[0].LineTotal) + (outbound.Discount) + outbound.Shipping;
-        //console.log(outbound.DocumentTotal);
-        outbound.DocumentTotalRC = outbound.DocumentTotal;*/
 
-        
-        /*//Unit Request - Default
-        var unitRequest = {
-            'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
-                "/odata/standard.odata/Catalog_UnitSets(guid'" + outbound.LineItems[0].UnitSet_Key + "')?$format=json",
-            'headers' : {
-                "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
-            },
-            'method' : "GET"
-        
-        };
-        
-        var unitResponse = z.request(unitRequest);
-        //console.log(unitResponse);
-        JSONResponse = JSON.parse(unitResponse.content);
-        outbound.LineItems[0].Unit_Key = JSONResponse.DefaultSaleUnit_Key;*/
-
-        
-        //Location & Actual Delivery Date - needed for lineItems
-        //if location is not set, use the default
-        if (outbound.Location_Key === undefined) {
-            var locationRequest =  {
-                'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
-                    '/odata/standard.odata/Catalog_Locations?$format=json&$filter=Default eq true', 
-                'headers': {
-                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
-                }, 
-                "method": "GET"
-              };
-            var locationResponse = z.request(locationRequest);
-            JSONResponse = JSON.parse(locationResponse.content);
-            outbound.Location_Key = JSONResponse.value[0].Ref_Key;
-        }
-
-        outbound.LineItems[0].DeliveryDate = outbound.DeliveryDateActual;
-        
-     //For loop for Line items total calculation
+        //For loop for Line items total calculation
         //var lineItems_field = bundle.action_fields.LineItems;
         var Doc_Subtotal = 0;
         var Doc_Discount = 0;
@@ -308,6 +239,7 @@ var Zap = {
                 outbound.LineItems[i].Product_Key = JSONResponse.value[0].Ref_Key; //Products
                 outbound.LineItems[i].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unit
                 outbound.LineItems[i].QtyUM = outbound.LineItems[i].QtyUnits; //Quantity
+                outbound.LineItems[i].DeliveryDate = outbound.DeliveryDateActual;
                 //LineTotal & LineSubtotal
                 outbound.LineItems[i].LineTotal = outbound.LineItems[i].PriceUnits * outbound.LineItems[i].QtyUnits; //Total Price
                 outbound.LineSubtotal = outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
@@ -355,7 +287,8 @@ var Zap = {
         //Document Total
         outbound.DocumentTotal = Doc_Subtotal + Doc_Discount + outbound.Shipping;
         outbound.DocumentTotalRC = outbound.DocumentTotal;
-    
+
+
     //error check for Company & Product
         var str = "";
         if (outbound.Company_Key === ""){
@@ -371,14 +304,15 @@ var Zap = {
            throw new ErrorException(str);
         }
         
-        
-        
-        //*****bundle stringify***************************************************************************
+        //*****bundle stringify****************************
         bundle.request.data = JSON.stringify(outbound);
         return bundle.request;
     },
 
 
+
+
+//sales order post write ********************************************************************************************************************************************
     sales_order_post_write: function(bundle) {
         var results = JSON.parse(bundle.response.content);
         //console.log(results);
@@ -402,6 +336,8 @@ var Zap = {
         bundle.request.data = JSON.stringify(outbound);
         return bundle.request;
     },
+
+//account post_write
     
     create_account_post_write: function(bundle) {
         var results = JSON.parse(bundle.response.content);
@@ -551,7 +487,7 @@ var Zap = {
             
         }*/
   
-    //if location is not set, use the default
+        //if location is not set, use the default
         if (outbound.Location_Key === undefined) {
             //console.log(outbound.Location_Key);
             var locationRequest =  {
@@ -566,9 +502,9 @@ var Zap = {
             JSONResponse = JSON.parse(locationResponse.content);
             outbound.Location_Key = JSONResponse.value[0].Ref_Key;
         }
-        outbound.LineItems[0].Location_Key = outbound.Location_Key; // for LineItem's location
         
-    //always USD and exchange rate of 1
+
+        //always USD and exchange rate of 1
         var currencyRequest =  {
             'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
                 "/odata/standard.odata/Catalog_Currencies?$format=json&$filter=Description eq 'USD'", 
@@ -582,7 +518,7 @@ var Zap = {
         outbound.Currency_Key = JSONResponse.value[0].Ref_Key;
         outbound.ExchangeRate = 1;
         
-    //Date
+        //Date
         var d = new Date();
         var n = d.toISOString();
         var date = n.split('.');
@@ -590,7 +526,7 @@ var Zap = {
             outbound.Date = date[0];
         }
         
-    //If user doesn't specify Address, use the default address 
+        //If user doesn't specify Address, use the default address 
         if (outbound.ShipTo_Key === undefined){
             var addressRequest = {
                 'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
@@ -608,7 +544,7 @@ var Zap = {
         }
        
         
-    //default parameters
+        //default parameters
         outbound.DiscountType = 'Percent';
         outbound.DiscountTaxability = "NonTaxable";
         outbound.DiscountTaxable = false;
@@ -626,6 +562,84 @@ var Zap = {
         //console.log(outbound.DocumentTotal);
         outbound.DocumentTotalRC = outbound.DocumentTotal;
         console.log(outbound.DocumentTotalRC);*/
+
+        var Doc_Subtotal = 0;
+        var Doc_Discount = 0;
+        var LinesTotal = 0;
+        console.log(bundle.action_fields.LineItems);
+
+        for (var i = 0, j = bundle.action_fields.LineItems.length; i < j; i++){
+            ////Product Request
+            var productRequest = {
+                'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                    '/odata/standard.odata/Catalog_Products?$format=json&$filter=Description eq ' + "'" + bundle.action_fields.LineItems[i].Product_Key + "'",
+                'headers' : {
+                    "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                },
+                'method' : "GET"
+
+            };
+            var productResponse = z.request(productRequest);
+            JSONResponse = JSON.parse(productResponse.content);
+            if (JSONResponse.value.length === 0){
+                outbound.LineItems[i].Product_Key = "";
+            }
+            else{
+                //LineItems               
+                outbound.LineItems[i].LineID = (randomStringGen(8) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(12) );
+                outbound.LineItems[i].LineNumber = i+1;
+                outbound.LineItems[i].ProductDescription = JSONResponse.value[0].Description;
+                outbound.LineItems[i].Product_Key = JSONResponse.value[0].Ref_Key; //Products
+                outbound.LineItems[i].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unit
+                outbound.LineItems[i].QtyUM = outbound.LineItems[i].QtyUnits; //Quantity
+                outbound.LineItems[i].Location_Key = outbound.Location_Key; // for LineItem's location
+                //LineTotal & LineSubtotal
+                outbound.LineItems[i].LineTotal = outbound.LineItems[i].PriceUnits * outbound.LineItems[i].QtyUnits; //Total Price
+                outbound.LineSubtotal = outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
+                LinesTotal += outbound.LineSubtotal;
+            }
+            
+              //Unit Request - Default
+            var unitRequest = {
+                'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                    "/odata/standard.odata/Catalog_UnitSets(guid'" + outbound.LineItems[i].UnitSet_Key + "')?$format=json",
+                'headers' : {
+                    "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                },
+                'method' : "GET"
+
+            };
+
+            var unitResponse = z.request(unitRequest);
+            JSONResponse = JSON.parse(unitResponse.content);
+            outbound.LineItems[i].Unit_Key = JSONResponse.DefaultSaleUnit_Key;
+
+        }
+
+
+        //if discount or shipping is undefined
+        if (outbound.DiscountPercent === undefined){
+            outbound.DiscountPercent = 0;
+        }
+
+        if (outbound.Discount === undefined){
+            outbound.Discount = - (LinesTotal * (outbound.DiscountPercent / 100));
+        }
+
+        if (outbound.Shipping === undefined){
+            outbound.Shipping = 0;
+        }
+
+        //Subtotal
+        outbound.Discount = - (LinesTotal * (outbound.DiscountPercent / 100)); //discount for each line item
+        Doc_Discount = outbound.Discount;
+        outbound.SubTotal = LinesTotal + Doc_Discount; //Subtotal = after discount, before shipping
+        Doc_Subtotal = outbound.SubTotal;
+
+
+        //Document Total
+        outbound.DocumentTotal = Doc_Subtotal + Doc_Discount + outbound.Shipping;
+        outbound.DocumentTotalRC = outbound.DocumentTotal;
         
         
         bundle.request.data = JSON.stringify(outbound);
