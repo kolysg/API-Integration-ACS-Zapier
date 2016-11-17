@@ -96,18 +96,7 @@ var Zap = {
         var duedate = n1.split('.');
         outbound.DueDate = duedate[0];
         console.log('alan check Due date: ' + outbound.DueDate);
-        
-        //moment('4/30/2016', 'MM/DD/YYYY').add(1, 'day')
-        /*var adjusted_time = d2.getTime() + terms_Days*24*60*60*1000; //in ms
-        console.log("adjusted time: " + adjusted_time);
-        var d3 = new Date(adjusted_time);
-        console.log('adjusted date: '+ d3);
-        var n1 = d3.toISOString();
-        console.log('adjusted date string: '+ n1);
-        var duedate = n1.split('.');
-        console.log('duedate: '+ duedate);
-        outbound.DueDate = duedate[0]; */
-           
+
 
         //ShipTo BillTo
         //If user doesn't specify Address, use the default address 
@@ -251,6 +240,9 @@ var Zap = {
             if (JSONResponse.value.length === 0){
                 outbound.LineItems[i].Product_Key = "";
             }
+            if(outbound.LineItems[i].Product_Key === ""){
+            str += "The product you entered doesn't exist. Please check 'AccountingSuite' software to find your product entry, or if needed, please use our 'Create_Product Zap' to create a new product.";
+        }
             else{
                 //LineItems               
                 outbound.LineItems[i].LineID = (randomStringGen(8) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(12) );
@@ -316,15 +308,6 @@ var Zap = {
 
 
     //error check for Company & Product
-        /*var str = "";
-        if (outbound.Company_Key === ""){
-            str += "The customer you entered doesn't exist. Please check 'AccountingSuite' software to find your company entry, or if needed, please use our 'Create_Company Zap' to create a new customer.";
-        } */
-        
-        if(outbound.LineItems[0].Product_Key === ""){
-            str += "The product you entered doesn't exist. Please check 'AccountingSuite' software to find your product entry, or if needed, please use our 'Create_Product Zap' to create a new product.";
-        }
-        
         if (str !== ""){
            //console.log(str);
            throw new ErrorException(str);
@@ -384,6 +367,8 @@ var Zap = {
         var outbound = JSON.parse(bundle.request.data);
         outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_SalesOrder_LineItems_RowType)"; //include this for lineItems to save it in a separate table
         
+        var str = ""; //error check
+        
     //Company Request
         var companyRequest =  {
             'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
@@ -394,17 +379,6 @@ var Zap = {
             "method": "GET"
           };
         var companyResponse = z.request(companyRequest);
-        /*var companyResponse = z.request(companyRequest,function(err, response){
-            var JSONResponse = JSON.parse(companyResponse.content);
-            //console.log('JSON_COMPANY: ' + companyResponse);
-            if (JSONResponse.value.length > 0) {
-                outbound.Company_Key = JSONResponse.value[0].Ref_Key;
-            }
-            else {
-                outbound.Company_Key = "";
-            }
-        });*/
-        
         var JSONResponse = JSON.parse(companyResponse.content);
         //console.log('JSON_COMPANY: ' + companyResponse);
         if (JSONResponse.value.length > 0) {
@@ -413,10 +387,13 @@ var Zap = {
         else {
             outbound.Company_Key = "";
         }
-
+        
+        if (outbound.Company_Key === ""){
+            str += "The customer you entered doesn't exist. Please check 'AccountingSuite' software to find your company entry, or if needed, please use our 'Create_Company Zap' to create a new customer.";
+        } 
         
          //if location is not set, use the default- 'SHIP FROM' field
-        if (outbound.Location_Key === undefined){
+        if (outbound.Location_Key === undefined && outbound.Company_Key !== '') {
             var shipfromLocationRequest =  {
                 'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
                     '/odata/standard.odata/Catalog_Locations?$format=json&$filter=Default eq true', 
@@ -436,11 +413,11 @@ var Zap = {
             }    
         }
         
-        if (outbound.Project_Key === undefined){
+        if (outbound.Project_Key === undefined && outbound.Company_Key !== ''){
             keyUndefined(outbound.Project_Key);
         }
         
-        if (outbound.Class_Key === undefined){
+        if (outbound.Class_Key === undefined && outbound.Company_Key !== ''){
             keyUndefined(outbound.Class_Key);
         }
 
@@ -504,7 +481,7 @@ var Zap = {
 
         
         //If user doesn't specify Address, use the default address 
-        if (outbound.ShipTo_Key === undefined){
+        if (outbound.ShipTo_Key === undefined && outbound.Company_Key !== ''){
             var addressRequest = {
                 'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
                     "/odata/standard.odata/Catalog_Addresses?$format=json&$filter=DefaultShipping eq true and Owner_Key eq guid'" + outbound.Company_Key + "'",
@@ -533,8 +510,11 @@ var Zap = {
         var LinesTotal = 0;
         var line_subtotal = 0;
         console.log(bundle.action_fields.LineItems);
-
-        for (var i = 0, j = bundle.action_fields.LineItems.length; i < j; i++){
+        var i;
+        var j = bundle.action_fields.LineItems;
+        
+        for (i = 0; i < j.length; i++){
+            
             ////Product Request
             var productRequest = {
                 'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
@@ -547,8 +527,13 @@ var Zap = {
             };
             var productResponse = z.request(productRequest);
             JSONResponse = JSON.parse(productResponse.content);
+            
             if (JSONResponse.value.length === 0){
                 outbound.LineItems[i].Product_Key = "";
+            }
+            
+            if(outbound.LineItems[i].Product_Key === ""){
+            str += "The product you entered doesn't exist. Please check 'AccountingSuite' software to find your product entry, or if needed, please use our 'Create_Product Zap' to create a new product.";
             }
             else{
                 //LineItems               
@@ -567,12 +552,15 @@ var Zap = {
                 line_subtotal += outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
                 console.log('Lines_subTotal: ' + line_subtotal);
             }
+            
+            
+            //Lines Total
             LinesTotal = line_subtotal;
             outbound.LineSubtotal = LinesTotal.toString();
             console.log('LinesTotal: ' + LinesTotal);
             
             
-              //Unit Request - Default
+            //Unit Request - Default
             var unitRequest = {
                 'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
                     "/odata/standard.odata/Catalog_UnitSets(guid'" + outbound.LineItems[i].UnitSet_Key + "')?$format=json",
@@ -588,7 +576,6 @@ var Zap = {
             outbound.LineItems[i].Unit_Key = JSONResponse.DefaultSaleUnit_Key;
             
         }
-        
 
         //if discount or shipping is undefined
         if (outbound.DiscountPercent === undefined){
@@ -616,14 +603,9 @@ var Zap = {
 
 
         //error check
-        var str = "";
-        if (outbound.Company_Key === ""){
+        /*if (outbound.Company_Key === ""){
             str += "The customer you entered doesn't exist. Please check 'AccountingSuite' software to find your company entry, or if needed, please use our 'Create_Company Zap' to create a new customer.  ";
-        } 
-        
-        if(outbound.LineItems[0].Product_Key === ""){
-            str += "The product you entered doesn't exist. Please check 'AccountingSuite' software to find your product entry, or if needed, please use our 'Create_Product Zap' to create a new product.";
-        }
+        } */        
         
         if (str !== ""){
            console.log(str);
