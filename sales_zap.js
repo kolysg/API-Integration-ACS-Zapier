@@ -1,3 +1,4 @@
+
 'use strict';
 
 function randomStringGen(len, charSet){
@@ -56,31 +57,16 @@ var Zap = {
         } */
         
         
-        //Date_default
-        /*var d = new Date();
-        var d2 = new Date(d);
-        console.log(d2);
-        console.log(d.getHours());
-        console.log(d.getTimezoneOffset()/60);
-        d2.setHours(d.getHours() - d.getTimezoneOffset()/60);
-        console.log(d2);
-        var n = d2.toISOString();
-        var date = n.split('.');
-        if (outbound.Date === undefined) {
-            outbound.Date = date[0];
-        }*/
-        
         //Using moment.js
         //moment('4/30/2016', 'MM/DD/YYYY').add(1, 'day')
         var d = moment();
         console.log('moment: ', d);
-        console.log('moment-to-date' + d.toDate());
         var n = d.format();
         var date = n.split('.');
         if (outbound.Date === undefined) {
             outbound.Date = date[0];
         } 
-        console.log('alan check date: ' + outbound.Date);
+        //console.log('check date: ' + outbound.Date);
        
 
         //Due Date based on Terms
@@ -96,7 +82,8 @@ var Zap = {
         if (outbound.Terms_Key === undefined) {
             var termsNet30_Request =  {
                 'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
-                    "/odata/standard.odata/Catalog_PaymentTerms(guid'e4ab5cdd-8b42-11e6-80d8-0cc47ac0d6e3')?$format=json", 
+                    //"/odata/standard.odata/Catalog_PaymentTerms(guid'e4ab5cdd-8b42-11e6-80d8-0cc47ac0d6e3')?$format=json", //&$filter=Description eq 'Net 30'
+                    "/odata/standard.odata/Catalog_PaymentTerms?$format=json&$filter=Description eq " + 'Net 30',
                 'headers': {
                   "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
                 }, 
