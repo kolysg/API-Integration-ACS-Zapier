@@ -127,6 +127,7 @@ create_bills_pre_write: function(bundle) {
         
         if (outbound.Terms_Key === undefined){
             terms_days = 30;
+            keyUndefined(outbound.Terms_Key);
         }
         
         var adjusted_days = momentObj.add(terms_days, 'days');
