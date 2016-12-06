@@ -58,14 +58,15 @@ create_bills_pre_write: function(bundle) {
             JSONResponse = JSON.parse(companyAddressResponse.content); 
             outbound.CompanyAddress_Key = JSONResponse.value[0].Ref_Key;
             console.log('default address' + outbound.CompanyAddress_Key);
-
         }
         
 
         //shipto location address
         //If user doesn't specify ship_to address, use the default address -- By default value is added in the UI- No need
-        if (outbound.LocationActual_Key === undefined && outbound.Company_Key !== ''){
-            var defaultAddressRequest = {
+        console.log('locationKey: ' + outbound.LocationActual_Key);
+        
+        if (outbound.LocationActual_Key === undefined){
+            var defaultLocationRequest = {
                 'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
                     "/odata/standard.odata/Catalog_Locations?$format=json&$filter=Default eq true",
                 'headers': {
@@ -73,8 +74,8 @@ create_bills_pre_write: function(bundle) {
                 }, 
                 "method": "GET"
                 };
-            var defaultAddressResponse = z.request(defaultAddressRequest);
-            JSONResponse = JSON.parse(defaultAddressResponse.content);
+            var defaultLocationResponse = z.request(defaultLocationRequest);
+            JSONResponse = JSON.parse(defaultLocationResponse.content);
             //console.log(JSONResponse);
             outbound.LocationActual_Key = JSONResponse.value[0].Ref_Key;
         } else {
@@ -94,20 +95,20 @@ create_bills_pre_write: function(bundle) {
 
 
         //Bill date
-        function dateFormat(date) {
-            var dateString = date;
-            var dateObj = new Date(dateString);
-            var momentObj = moment(dateObj); 
-
-            date = momentObj.format();
-            console.log('date: ' + date);
-
-            if (date === undefined) {
-                returnEmptyDate(date);
-            }
+        var dateString = '';
+        var dateObj = {};
+        var momentObj = moment(dateObj);
+        
+        if (bundle.action_fields.Date === undefined){
+            dateObj = moment();
+            outbound.Date = momentObj.format();
+            console.log("Date: " + outbound.Date);
+        } else {
+            dateString = outbound.Date;
+            dateObj = new Date(dateString);
+            outbound.Date = momentObj.format();
+            console.log("Date: " + outbound.Date);
         }
-        
-        
         
         //Due Date based on Terms
         var TermsRequest =  {
@@ -120,48 +121,26 @@ create_bills_pre_write: function(bundle) {
         };
         var TermsResponse = z.request(TermsRequest);
         JSONResponse = JSON.parse(TermsResponse.content);
-        console.log(JSONResponse);
+        console.log(JSONResponse.Days);
         var terms_days = (Number(JSONResponse.Days));
-        console.log(terms_days);
+        console.log('terms_days: ' + terms_days);
         
         if (outbound.Terms_Key === undefined){
             terms_days = 30;
         }
         
-        var dateString;
-        var dateObj;
-
-        if (outbound.Date === undefined){
-            dateObj = moment();
-            console.log('dateObj1: ' + dateObj);
-        } else {
-            dateString = outbound.Date;
-            dateObj = new Date(dateString);
-            console.log('dateObj2: ' + dateObj);
-        }
-
-        var momentObj = moment(dateObj);
-        console.log('momentObj: ' + momentObj);
-
-
         var adjusted_days = momentObj.add(terms_days, 'days');
-        console.log("adjusted_days: ", adjusted_days);
-        var duedate = adjusted_days.format();
-        outbound.DueDate = duedate;
-        console.log("DueDate: ", outbound.DueDate);
-        
-        
-
+        //console.log("adjusted_days: ", adjusted_days);
+        outbound.DueDate = adjusted_days.format();
+        console.log("DueDate: " + outbound.DueDate);
         
         
         //default dates
-        dateFormat(outbound.Date);
-        dateFormat(outbound.DeliveryDate);
+        if (outbound.DeliveryDate === undefined) {
+            returnEmptyDate(outbound.DeliveryDate);
+        }
         outbound.DeliveryDate = outbound.DeliveryDateActual;
-       
-        //dueDate based on Terms
-        
-        
+
         //default functions
         function returnEmptyDate(outboundDate) {
             outboundDate = "0001-01-01T00:00:00";
@@ -232,7 +211,8 @@ create_bills_pre_write: function(bundle) {
                 outbound.LineItems[i].Product_Key = JSONResponse.value[0].Ref_Key; //Products
                 outbound.LineItems[i].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unitset
                 outbound.LineItems[i].QtyUM = outbound.LineItems[i].QtyUnits; //Quantity
-                outbound.LineItems[i].Location_Key = outbound.Location_Key; // for LineItem's location
+                outbound.LineItems[i].LocationActual_Key = outbound.LocationActual_Key;
+                outbound.LineItems[i].Location_Key = outbound.LocationActual_Key; // for LineItem's location
                 outbound.LineItems[i].Project_Key = outbound.Project_Key;//Line Item's Projects
                 outbound.LineItems[i].Class_Key = outbound.Class_Key;//Line Item's Class
                 outbound.LineItems[i].DeliveryDate = outbound.DeliveryDateActual; //Promise Date
