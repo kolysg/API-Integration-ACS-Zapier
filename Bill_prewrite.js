@@ -1,4 +1,4 @@
-create_bills_pre_write: function(bundle) {
+ create_bills_pre_write: function(bundle) {
         var outbound = JSON.parse(bundle.request.data);
         outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_PurchaseInvoice_LineItems_RowType)";
         
@@ -27,12 +27,12 @@ create_bills_pre_write: function(bundle) {
         }
         
         if (outbound.Company_Key === ""){
-            str += "The vendor you entered doesn't exist. Please check 'AccountingSuite' software to find your company entry, or if needed, please use our 'Create_Company Zap' to create a new vendor.";
+            str += "The vendor you entered doesn't exist. Please check 'AccountingSuite' software to find your company entry, or if needed, please use our 'Create Company Zap' to create a new vendor.";
         } 
         
 
         //Address default is Primary
-        if (outbound.CompanyAddress_Key === undefined && outbound.Company_Key !== undefined) {
+        if (outbound.CompanyAddress_Key === undefined) {
             var DefaultAddressRequest =  {
                 'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
                     "/odata/standard.odata/Catalog_Addresses?$format=json&$filter=Description eq 'Primary' and Owner_Key eq guid'" + outbound.Company_Key + "'", 
@@ -46,7 +46,9 @@ create_bills_pre_write: function(bundle) {
             outbound.CompanyAddress_Key = JSONResponse.value[0].Ref_Key;
             console.log('default address' + outbound.CompanyAddress_Key);
         } else {
-            var companyAddressRequest =  {
+            str+=  "The address you entered doesn't exist. Please check 'AccountingSuite' software to find your address entry, or if needed, please use our 'Create Address/Contact Zap' to create a new address.";
+            keyUndefined(outbound.Company_Key);
+            /*var companyAddressRequest =  {
                 'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
                     "/odata/standard.odata/Catalog_Addresses?$format=json&$filter=Description eq '" + bundle.action_fields.CompanyAddress_Key + "'" , 
                 'headers': {
@@ -57,7 +59,7 @@ create_bills_pre_write: function(bundle) {
             var companyAddressResponse = z.request(companyAddressRequest);
             JSONResponse = JSON.parse(companyAddressResponse.content); 
             outbound.CompanyAddress_Key = JSONResponse.value[0].Ref_Key;
-            console.log('default address' + outbound.CompanyAddress_Key);
+            console.log('default address' + outbound.CompanyAddress_Key);*/
         }
         
 
@@ -78,7 +80,7 @@ create_bills_pre_write: function(bundle) {
             JSONResponse = JSON.parse(defaultLocationResponse.content);
             //console.log(JSONResponse);
             outbound.LocationActual_Key = JSONResponse.value[0].Ref_Key;
-        } else {
+        } /*else {
             var shiptoLocationRequest = {
                 'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
                     "/odata/standard.odata/Catalog_Locations?$format=json&$filter=Description eq '" + bundle.action_fields.LocationActual_Key + "'",
@@ -91,7 +93,7 @@ create_bills_pre_write: function(bundle) {
             JSONResponse = JSON.parse(shiptoLocationResponse.content);
             console.log('shiptoAddressResponse: ' + shiptoLocationResponse.content);
             outbound.LocationActual_Key = JSONResponse.value[0].Ref_Key;
-        } 
+        } */
 
 
         //Bill date
