@@ -1,5 +1,4 @@
-//Purchase Order Pre Write ****************************************************************************************************** ******************************************************************************************************
-    purchase_order_pre_write: function(bundle) {
+purchase_order_pre_write: function(bundle) {
         var outbound = JSON.parse(bundle.request.data);
         outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_PurchaseOrder_LineItems_RowType)"; //include this for lineItems to save it in a separate table
         console.log('bundle' + bundle.request.data);
@@ -69,7 +68,6 @@
             outbound.Date = date[0];
         }
 
-        
         //shipto location address
         //If user doesn't specify ship_to address, use the default address -- By default value is added in the UI- No need
         if (outbound.Location_Key === undefined && outbound.Company_Key !== ''){
