@@ -1,4 +1,4 @@
-purchase_order_pre_write: function(bundle) {
+ purchase_order_pre_write: function(bundle) {
         var outbound = JSON.parse(bundle.request.data);
         outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_PurchaseOrder_LineItems_RowType)"; //include this for lineItems to save it in a separate table
         console.log('bundle' + bundle.request.data);
@@ -43,7 +43,10 @@ purchase_order_pre_write: function(bundle) {
             JSONResponse = JSON.parse(DefaultAddressResponse.content); 
             outbound.CompanyAddress_Key = JSONResponse.value[0].Ref_Key;
             console.log('default address' + outbound.CompanyAddress_Key);
-        } 
+        } else {
+            str+=  "The address you entered doesn't exist. Please check 'AccountingSuite' software to find your address entry, or if needed, please use our 'Create Address/Contact Zap' to create a new address.";
+            keyUndefined(outbound.Company_Key);
+        }
         
         //always USD and exchange rate of 1
         var currencyRequest =  {
@@ -71,7 +74,7 @@ purchase_order_pre_write: function(bundle) {
         //shipto location address
         //If user doesn't specify ship_to address, use the default address -- By default value is added in the UI- No need
         if (outbound.Location_Key === undefined && outbound.Company_Key !== ''){
-            var defaultAddressRequest = {
+            var defaultLocationRequest = {
                 'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
                     "/odata/standard.odata/Catalog_Locations?$format=json&$filter=Default eq true",
                 'headers': {
@@ -79,23 +82,23 @@ purchase_order_pre_write: function(bundle) {
                 }, 
                 "method": "GET"
                 };
-            var defaultAddressResponse = z.request(defaultAddressRequest);
-            JSONResponse = JSON.parse(defaultAddressResponse.content);
+            var defaultLocationResponse = z.request(defaultLocationRequest);
+            JSONResponse = JSON.parse(defaultLocationResponse.content);
             //console.log(JSONResponse);
             outbound.Location_Key = JSONResponse.value[0].Ref_Key;
         } else {
-            var addressRequest = {
+            var locationRequest = {
                 'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
-                    "/odata/standard.odata/Catalog_Locations?$format=json&$filter=Description eq '" + bundle.action_fields.Location_Key + "'",
+                    "/odata/standard.odata/Catalog_Locations((guid'" + outbound.Location_Key + "')?$format=json",
                 'headers': {
                   "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
                 }, 
                 "method": "POST"
                 };
-            var addressResponse = z.request(addressRequest);
-            JSONResponse = JSON.parse(addressResponse.content);
-            console.log('addressResponse: ' + addressResponse.content);
-            outbound.Location_Key = JSONResponse.value[0].Ref_Key;
+            var locationResponse = z.request(locationRequest);
+            JSONResponse = JSON.parse(locationResponse.content);
+            console.log('addressResponse: ' + locationResponse.content);
+            outbound.Location_Key = JSONResponse.Ref_Key;
         } 
         
         
