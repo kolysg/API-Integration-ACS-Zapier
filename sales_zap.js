@@ -1,5 +1,11 @@
 'use strict';
 
+
+
+
+
+
+
 function randomStringGen(len, charSet){
     charSet = charSet || 'abcdef0123456789';
     var randomString = '';
@@ -104,14 +110,12 @@ var Zap = {
         var momentObj = moment(dateObj);
         console.log('momentObj: ' + momentObj);
         
-        /*moment.locale('en-gb');
-        var outbound_date = moment(outbound.date, 'L');
-        var adjusted_days = outbound_date.add("days", 1);*/
+       
         var adjusted_days = momentObj.add(terms_days, 'days');
         console.log("adjusted_days: ", adjusted_days);
-        var n1 = adjusted_days.format();
-        var duedate = n1.split('.');
-        outbound.DueDate = duedate[0];
+        var duedate = adjusted_days.format();
+        //var  = n1.split('.');
+        outbound.DueDate = duedate;
         console.log('alan check Due date: ' + outbound.DueDate);
         
         
