@@ -1,4 +1,4 @@
-'use strict';
+//'use strict';
 
 function randomStringGen(len, charSet){
     charSet = charSet || 'abcdef0123456789';
@@ -28,8 +28,758 @@ function returnEmptyString(outboundVal) {
 
 var LineId_Key = (randomStringGen(8) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(12) ); //creates random (8-4-4-4-12 digit) LineID String
 
+
 var Zap = {
-//Triggers - postPoll
+    credit_memo_post_write: function(bundle) {
+        var results = JSON.parse(bundle.response.content);
+        //console.log(results);
+        var credit_memo_post_request = {
+            'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                "/odata/standard.odata/Document_SalesReturn(guid'" + results.Ref_Key + "')/Post",
+            'headers': {
+              "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            }, 
+            "method": "Post"
+        };
+        var credit_memo_post_Response = z.request(credit_memo_post_request);   
+    },
+
+
+//Credit Memo Pre-write****************************************************************************************************************************************
+    credit_memo_pre_write: function(bundle) {
+        var outbound = JSON.parse(bundle.request.data);
+        outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_SalesReturn_LineItems_RowType)";
+    
+         //error check for Company bad input
+        var str = "";
+    
+        //invoice date
+        var date;
+        if (outbound.Date === undefined) {
+            var d = moment();
+            var n = d.format();
+            date = n.split('.');
+            outbound.Date = date[0];
+        } else {
+           outbound.Date = outbound.Date; 
+        }
+        console.log(outbound.Date);
+
+        //company
+        var companyRequest =  {
+            'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                '/odata/standard.odata/Catalog_Companies?$format=json&$filter=Description eq ' + "'" + bundle.action_fields.Company_Key + "'",
+            'headers': {
+              "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            }, 
+            "method": "GET"
+        };
+        var companyResponse = z.request(companyRequest);
+        var JSONResponse = JSON.parse(companyResponse.content);
+        console.log('company ' + JSONResponse);
+
+        if (JSONResponse.value.length > 0) {
+            outbound.Company_Key = JSONResponse.value[0].Ref_Key;
+        } else {
+            outbound.Company_Key = "";
+        }
+
+        if (outbound.Company_Key === ""){
+            str += "The customer you entered doesn't exist. Please check 'AccountingSuite' software to find your company entry, or if needed, please use our 'Create_Company Zap' to create a new customer.";
+        } 
+
+         //Default Bank Account 
+         if (outbound.ARAccount_Key === undefined) {
+            var defaultbankRequest = {
+                'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                        "/odata/standard.odata/ChartOfAccounts_ChartOfAccounts?$format=json&$filter=Description eq 'Accounts Receivable'",
+                'headers': {
+                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                }, 
+                "method": "GET"
+            };
+            var defaultbankResponse = z.request(defaultbankRequest);
+            JSONResponse = JSON.parse(defaultbankResponse.content); 
+            outbound.ARAccount_Key = JSONResponse.value[0].Ref_Key;  
+            console.log('bank Account Key: ' + outbound.ARAccount_Key);
+        } 
+        
+        //Memo
+        if (outbound.Memo === undefined) {
+            outbound.Memo = "";
+        }
+    
+    //Warehouse Location
+    //if location is not set, use the default
+    if (outbound.Location_Key === undefined && outbound.Company_Key !== '') {
+        var locationRequest =  {
+            'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                '/odata/standard.odata/Catalog_Locations?$format=json&$filter=Default eq true', 
+            'headers': {
+              "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            }, 
+            "method": "GET"
+          };
+        var locationResponse = z.request(locationRequest);
+        JSONResponse = JSON.parse(locationResponse.content);
+        outbound.Location_Key = JSONResponse.value[0].Ref_Key;
+        console.log(outbound.Location_Key);
+    }
+    
+    if (outbound.URL === undefined){
+        outbound.URL = "";
+    }
+       
+        
+    //Sales Person
+    var SalesPersonRequest =  {
+        'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+            "/odata/standard.odata/Catalog_SalesPeople(guid'" + outbound.SalesPerson_Key + "')?$format=json", 
+        'headers': {
+          "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+        }, 
+        "method": "GET"
+    };
+    var SalesPersonResponse = z.request(SalesPersonRequest);
+    JSONResponse = JSON.parse(SalesPersonResponse.content);
+    outbound.SalesPerson_Key = JSONResponse.Ref_Key;
+    if (outbound.SalesPerson_Key === undefined){
+        outbound.SalesPerson_Key = "00000000-0000-0000-0000-000000000000";
+    }
+    
+
+    //Project Request
+    if (outbound.Project_Key === undefined){
+        var projectRequest = {
+            'url' : "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                "/odata/standard.odata/Catalog_Projects(guid'" + outbound.Project_Key + "')?$format=json",
+            'headers' : {
+                "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            },
+            'method' : "GET"
+        };
+        var projectResponse = z.request(projectRequest);
+        JSONResponse = JSON.parse(projectResponse.content);
+        outbound.Project_Key = JSONResponse.Ref_Key;
+    }
+    //outbound.LineItems[0].Project_Key = outbound.Project_Key; 
+    if (outbound.Project_Key === undefined){
+        outbound.Project_Key = "00000000-0000-0000-0000-000000000000";
+    }
+
+    
+    //Class Request
+    if (outbound.Class_Key === undefined){
+        var classRequest = {
+            'url' : "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                "/odata/standard.odata/Catalog_Classes(guid'" + outbound.Class_Key + "')?$format=json",
+            'headers' : {
+                "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            },
+            'method' : "GET"
+        };
+        var classResponse = z.request(classRequest);
+        JSONResponse = JSON.parse(classResponse.content);
+        outbound.Class_Key = JSONResponse.Ref_Key;
+    }
+    if (outbound.Class_Key === undefined){
+        outbound.Class_Key = "00000000-0000-0000-0000-000000000000";
+    }
+    if (outbound.URL === undefined){
+            outbound.URL = "";
+    }
+
+
+    //LineItems
+    var line_subtotal=0;
+    var i;
+    var j = bundle.action_fields.LineItems;
+
+    for (i = 0; i < j.length; i++){
+    
+        //Unit Request - Default
+        var unitRequest = {
+            'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+            "/odata/standard.odata/Catalog_UnitSets(guid'" + outbound.LineItems[i].UnitSet_Key + "')?$format=json",
+            'headers' : {
+            "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            },
+            'method' : "GET"
+
+        };
+
+        var unitResponse = z.request(unitRequest);
+        JSONResponse = JSON.parse(unitResponse.content);
+        outbound.LineItems[i].Unit_Key = JSONResponse.DefaultSaleUnit_Key;
+
+        //if undefined
+        keyUndefined(outbound.LineItems[i].UnitSet_Key);
+        keyUndefined(outbound.LineItems[i].Unit_Key);
+
+        //if discount or shipping is undefined
+        if (outbound.DiscountPercent === undefined){
+            outbound.DiscountPercent = 0;
+        }
+
+        if (outbound.Discount === undefined){
+            outbound.Discount = 0;
+        }
+
+        if (outbound.Shipping === undefined){
+            outbound.Shipping = 0;
+        }
+
+        //Product Request
+        var productRequest = {
+            'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+            '/odata/standard.odata/Catalog_Products?$format=json&$filter=Description eq ' + "'" + bundle.action_fields.LineItems[i].Product_Key + "'",
+            'headers' : {
+            "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+        },
+        'method' : "GET"
+
+        };
+        var productResponse = z.request(productRequest);
+        JSONResponse = JSON.parse(productResponse.content);
+        if (JSONResponse.value.length === 0){
+            outbound.LineItems[i].Product_Key = "";
+        }   
+    
+        if(outbound.LineItems[i].Product_Key === ""){
+            str += "The product you entered doesn't exist. Please check 'AccountingSuite' software to find your product entry, or if needed, please use our 'Create_Product Zap' to create a new product.";
+        }
+        else{
+        //LineItems  
+            outbound.LineItems[i].LineID = (randomStringGen(8) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(12) );
+            outbound.LineItems[i].LineNumber = (i+1).toString();
+            outbound.LineItems[i].ProductDescription = JSONResponse.value[0].Description;
+            outbound.LineItems[i].Product_Key = JSONResponse.value[0].Ref_Key; //Products
+            outbound.LineItems[i].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unit
+            outbound.LineItems[i].Unit_Key = outbound.LineItems[i].UnitSet_Key; //Unit
+            
+            outbound.LineItems[i].QtyUM = outbound.LineItems[i].QtyUnits; //Quantity
+            //outbound.LineItems[i].Location_Key = outbound.Location_Key; // for LineItem's location
+            
+             //LineTotal & LineSubtotal
+            outbound.LineItems[i].LineTotal = outbound.LineItems[i].PriceUnits * outbound.LineItems[i].QtyUnits; //Total Price
+            console.log('Linetotal: ' + outbound.LineItems[i].LineTotal);
+            line_subtotal += outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
+        }
+        outbound.LineSubtotal = line_subtotal; //LineTotal = LineItemTotal, in UI, before discount & shipping
+        console.log('LineSubtotal: ' + outbound.LineSubtotal);
+       
+        //Subtotal
+        outbound.Discount = - (outbound.LineSubtotal * (outbound.DiscountPercent / 100)); //discount for each line item
+        console.log('Discount: ' + outbound.Discount);
+        outbound.SubTotal = outbound.LineSubtotal + outbound.Discount; //Subtotal = after discount, before shipping
+        console.log('Subtotal: ' + outbound.SubTotal);
+        //Total
+        outbound.DocumentTotal = outbound.SubTotal + outbound.Shipping; //after shipping & discount
+        outbound.DocumentTotalRC = outbound.DocumentTotal;
+        console.log('DocumentTotal: ' + outbound.DocumentTotal);
+        }
+        
+    //error check for Company & Product
+    if (str !== ""){
+       //console.log(str);
+       throw new ErrorException(str);
+    }
+
+    //*****bundle stringify****************************
+    bundle.request.data = JSON.stringify(outbound);
+    console.log(bundle.request.data);
+    return bundle.request;
+    },
+    
+
+//Purchase return pre-write**************************************************************************************************************************
+    purchase_return_pre_write: function(bundle) {
+        var outbound = JSON.parse(bundle.request.data);
+    outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_PurchaseReturn_LineItems_RowType)";
+    
+     //error check for Company bad input
+    var str = "";
+    
+    //invoice date
+    var date;
+    if (outbound.Date === undefined) {
+        var d = moment();
+        var n = d.format();
+        date = n.split('.');
+        outbound.Date = date[0];
+    } else {
+       outbound.Date = outbound.Date; 
+    }
+    console.log(outbound.Date);
+        
+    //Vendor
+    var companyRequest =  {
+        'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+            '/odata/standard.odata/Catalog_Companies?$format=json&$filter=Description eq ' + "'" + bundle.action_fields.Company_Key + "'",
+        'headers': {
+          "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+        }, 
+        "method": "GET"
+    };
+    var companyResponse = z.request(companyRequest);
+    var JSONResponse = JSON.parse(companyResponse.content);
+   
+    if (JSONResponse.value.length > 0) {
+        outbound.Company_Key = JSONResponse.value[0].Ref_Key;
+    } else {
+        outbound.Company_Key = "";
+    }
+    
+    if (outbound.Company_Key === ""){
+        str += "The vendor you entered doesn't exist. Please check 'AccountingSuite' software to find your company entry, or if needed, please use our 'Create_Company Zap' to create a new customer.";
+    } 
+    
+    //Warehouse Location
+    //if location is not set, use the default
+    if (outbound.Location_Key === undefined && outbound.Company_Key !== '') {
+        var locationRequest =  {
+            'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                '/odata/standard.odata/Catalog_Locations?$format=json&$filter=Default eq true', 
+            'headers': {
+              "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            }, 
+            "method": "GET"
+          };
+        var locationResponse = z.request(locationRequest);
+        JSONResponse = JSON.parse(locationResponse.content);
+        outbound.Location_Key = JSONResponse.value[0].Ref_Key;
+    }
+    
+    if (outbound.URL === undefined){
+        outbound.URL = "";
+    }
+    
+    //Bank Account- What is default in this case?
+         if (outbound.BankAccount_Key === undefined) {
+            var defaultbankRequest = {
+                'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                        "/odata/standard.odata/ChartOfAccounts_ChartOfAccounts?$format=json&$filter=Description eq 'Accounts Payable'",
+                'headers': {
+                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                }, 
+                "method": "GET"
+            };
+            var defaultbankResponse = z.request(defaultbankRequest);
+            JSONResponse = JSON.parse(defaultbankResponse.content); 
+            outbound.APAccount_Key = JSONResponse.value[0].Ref_Key;   
+        } 
+        
+        //Memo
+        if (outbound.Memo === undefined) {
+            outbound.Memo = "";
+        }
+    
+    
+    //LineItems
+    var line_subtotal=0;
+    var i;
+    var j = bundle.action_fields.LineItems;
+   
+
+    for (i = 0; i < j.length; i++){
+
+        //Product Request
+        var productRequest = {
+            'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+            '/odata/standard.odata/Catalog_Products?$format=json&$filter=Description eq ' + "'" + bundle.action_fields.LineItems[i].Product_Key + "'",
+            'headers' : {
+            "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+        },
+        'method' : "GET"
+
+        };
+        var productResponse = z.request(productRequest);
+        JSONResponse = JSON.parse(productResponse.content);
+        if (JSONResponse.value.length === 0){
+            outbound.LineItems[i].Product_Key = "";
+        }   
+    
+        if(outbound.LineItems[i].Product_Key === ""){
+            str += "The product you entered doesn't exist. Please check 'AccountingSuite' software to find your product entry, or if needed, please use our 'Create_Product Zap' to create a new product.";
+        }
+        else{
+        //LineItems               
+            outbound.LineItems[i].LineID = (randomStringGen(8) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(4) + "-" + randomStringGen(12) );
+            outbound.LineItems[i].LineNumber = (i+1).toString();
+            outbound.LineItems[i].ProductDescription = JSONResponse.value[0].Description;
+            outbound.LineItems[i].Product_Key = JSONResponse.value[0].Ref_Key; //Products
+            outbound.LineItems[i].UnitSet_Key = JSONResponse.value[0].UnitSet_Key; //Unit
+            outbound.LineItems[i].Unit_Key = outbound.LineItems[i].UnitSet_Key; //Unit
+            outbound.LineItems[i].QtyUM = outbound.LineItems[i].QtyUnits; //Quantity
+            outbound.LineItems[i].Location_Key = outbound.Location_Key; // for LineItem's location
+            
+            //if undefined
+            keyUndefined(outbound.LineItems[i].Product_Key);
+            keyUndefined(outbound.LineItems[i].UnitSet_Key);
+            keyUndefined(outbound.LineItems[i].Unit_Key);
+       
+        //LineTotal & LineSubtotal
+            outbound.LineItems[i].LineTotal = outbound.LineItems[i].PriceUnits * outbound.LineItems[i].QtyUnits; //Total Price
+            line_subtotal += outbound.LineItems[i].LineTotal; //LineTotal = LineItemTotal, in UI, it's 'Lines'
+            outbound.DocumentTotal = line_subtotal;
+            outbound.DocumentTotalRC = outbound.DocumentTotal;
+        }
+    
+        //Unit Request - Default
+        var unitRequest = {
+            'url' : 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+            "/odata/standard.odata/Catalog_UnitSets(guid'" + outbound.LineItems[i].UnitSet_Key + "')?$format=json",
+            'headers' : {
+            "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            },
+            'method' : "GET"
+
+        };
+
+        var unitResponse = z.request(unitRequest);
+        JSONResponse = JSON.parse(unitResponse.content);
+        outbound.LineItems[i].Unit_Key = JSONResponse.DefaultSaleUnit_Key;
+    
+    }
+        
+            
+    //error check for Company & Product
+    if (str !== ""){
+       //console.log(str);
+       throw new ErrorException(str);
+    }
+
+    //*****bundle stringify****************************
+    bundle.request.data = JSON.stringify(outbound);
+    console.log(bundle.request.data);
+    return bundle.request;
+        
+},     
+        
+        
+ //Bank Transfer****************************************************************************************************************************************
+    bank_transfer_pre_write: function(bundle) {
+        var outbound = JSON.parse(bundle.request.data);
+        
+        //error check for Company bad input
+        var str = "";
+        var JSONResponse;
+        
+        // date
+        var date;
+        if (outbound.Date === undefined) {
+            var d = moment();
+            console.log('moment: '+ d);
+            var n = d.format();
+            date = n.split('.');
+            console.log('date: '+ date);
+            outbound.Date = date[0];
+        } else {
+           outbound.Date = outbound.Date; 
+        }
+        
+     
+        var bankRequest = {
+            'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                    "/odata/standard.odata/ChartOfAccounts_ChartOfAccounts(guid'" + outbound.BankAccount_Key + "')?$format=json",
+            'headers': {
+              "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            }, 
+            "method": "GET" 
+        };
+        var bankResponse = z.request(bankRequest);
+        JSONResponse = JSON.parse(bankResponse.content);
+       // outbound.Currency_Key = JSONResponse.value[0].Currency_Key;
+        //outbound.ExchangeRate = 1.0;
+        outbound.AmountTo = outbound.Amount;
+        
+        //always USD and exchange rate of 1
+        var currencyRequest =  {
+            'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                "/odata/standard.odata/Catalog_Currencies?$format=json&$filter=Description eq 'USD'", 
+            'headers': {
+              "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            }, 
+            "method": "GET"
+          };
+        var currencyResponse = z.request(currencyRequest);
+        JSONResponse = JSON.parse(currencyResponse.content);
+        outbound.Currency_Key = JSONResponse.value[0].Ref_Key;
+        outbound.ExchangeRate = 1;
+            
+             //error check
+        if (str !== ""){
+           //console.log(str);
+           throw new ErrorException(str);
+        }   
+         //*****bundle stringify****************************
+        bundle.request.data = JSON.stringify(outbound);
+        console.log(bundle.request.data);
+        return bundle.request;
+    },
+    
+
+    /*purchase_invoice_list_pre_poll: function(bundle) {
+        var results = JSON.parse(bundle.response.content);
+        _.each(results, function(result) {
+          result.Description = "Bill" + result.Number + "from" + result.Date.split("T")[0];
+          
+        });
+    console.log(results.Description);
+    return results;
+    },*/
+
+    bill_payment_post_write: function(bundle) {
+    var results = JSON.parse(bundle.response.content);
+        //console.log(results);
+        var bill_payment_post_request = {
+            'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                "/odata/standard.odata/Document_InvoicePayment(guid'" + results.Ref_Key + "')/Post",
+            'headers': {
+              "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            }, 
+            "method": "Post"
+        };
+        var bill_payment_post_Response = z.request(bill_payment_post_request);   
+    },
+
+
+ //Bill Payment****************************************************************************************************************************************
+    bill_payment_pre_write: function(bundle) {
+        var outbound = JSON.parse(bundle.request.data);
+        outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_InvoicePayment_LineItems_RowType)";
+        //error check for Company bad input
+        var str = "";
+        
+        // date
+        var date;
+        if (outbound.Date === undefined) {
+            var d = moment();
+            console.log('moment: '+ d);
+            var n = d.format();
+            date = n.split('.');
+            console.log('date: '+ date);
+            outbound.Date = date[0];
+        } else {
+           outbound.Date = outbound.Date; 
+        }
+        
+        //Customer Request
+        var companyRequest =  {
+            'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                '/odata/standard.odata/Catalog_Companies?$format=json&$filter=Description eq ' + "'" + bundle.action_fields.Company_Key + "'",
+            'headers': {
+              "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            }, 
+            "method": "GET"
+        };
+        var companyResponse = z.request(companyRequest);
+        var JSONResponse = JSON.parse(companyResponse.content);
+       
+        if (JSONResponse.value.length > 0) {
+            outbound.Company_Key = JSONResponse.value[0].Ref_Key;
+        } else {
+            outbound.Company_Key = "";
+        }
+        
+        if (outbound.Company_Key === ""){
+            str += "The customer you entered doesn't exist. Please check 'AccountingSuite' software to find your company entry, or if needed, please use our 'Create_Company Zap' to create a new customer.";
+        }
+
+
+         //Remit To Address Request
+
+         //Address default is Primary
+        if (outbound.RemitTo_Key === undefined) {
+            var DefaultAddressRequest =  {
+                'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                    "/odata/standard.odata/Catalog_Addresses?$format=json&$filter=Description eq 'Primary' and Owner_Key eq guid'" + outbound.Company_Key + "'", 
+                'headers': {
+                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                }, 
+                "method": "GET"
+              };
+            var DefaultAddressResponse = z.request(DefaultAddressRequest);
+            JSONResponse = JSON.parse(DefaultAddressResponse.content); 
+            outbound.CompanyAddress_Key = JSONResponse.value[0].Ref_Key;
+            console.log('default address' + outbound.CompanyAddress_Key);
+        } else {
+            str+=  "The address you entered doesn't exist. Please check 'AccountingSuite' software to find your address entry, or if needed, please use our 'Create Address/Contact Zap' to create a new address. ";
+            keyUndefined(outbound.Company_Key);
+        }
+        
+        //Ref#
+        if (outbound.RefNum === undefined) {
+             outbound.RefNum = '';
+        }
+    
+        //Bank Account- What is default in this case?
+         if (outbound.BankAccount_Key === undefined) {
+            var defaultbankRequest = {
+                'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                        "/odata/standard.odata/ChartOfAccounts_ChartOfAccounts?$format=json&$filter=Description eq 'Business Checking'",
+                'headers': {
+                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                }, 
+                "method": "GET"
+            };
+            var defaultbankResponse = z.request(bankRequest);
+            JSONResponse = JSON.parse(defaultbankResponse.content); 
+            outbound.BankAccount_Key = JSONResponse.value[0].Ref_Key;   
+        } else {
+            var bankRequest = {
+                'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                        "/odata/standard.odata/ChartOfAccounts_ChartOfAccounts(guid'" + outbound.BankAccount_Key + "')?$format=json",
+                'headers': {
+                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                }, 
+                "method": "GET" 
+            };
+            var bankResponse = z.request(bankRequest);
+            JSONResponse = JSON.parse(bankResponse.content); 
+            //console.log(JSONResponse);
+            //console.log("description:" + JSONResponse.Description);
+        }
+        
+        //Memo
+        if (outbound.Memo === undefined) {
+            outbound.Memo = "";
+        }
+
+        //Line Items
+        var TotalInvoices = 0;
+        if (outbound.LineItems === undefined) { 
+                str += "Please enter a valid Purchase-Invoice-Number. Our current setup cannot process any invoice which doesn't have a number. Please contact accountingsuite for further inquiries.";
+        } else {
+            var j = outbound.LineItems;
+            
+            for (var i = 0; i < j.length; i++){
+                outbound.LineItems[i].LineNumber = (i + 1).toString();
+                outbound.LineItems[i].Payment = outbound.CashPayment;
+                outbound.LineItems[i].Document_Type = "StandardODATA.Document_InvoicePayment";
+            //If it's an existing bill
+                var DocumentRequest = {
+                    'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                             "/odata/standard.odata/Document_PurchaseInvoice?$format=json&$filter=Number eq '" + bundle.action_fields.LineItems[i].Document + "'",
+                    'headers': {
+                      "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                    }, 
+                    "method": "GET"
+                };
+                var DocumentResponse = z.request(DocumentRequest);
+                JSONResponse = JSON.parse(DocumentResponse.content);
+                console.log("document_response" + JSONResponse);
+                //outbound.ARAccount_Key = JSONResponse.value[0].ARAccount_Key;
+                outbound.LineItems[i].Document = JSONResponse.value[0].Ref_Key;
+                outbound.LineItems[i].Payment = JSONResponse.value[0].DocumentTotal;//not sure what's going on here.
+                console.log("LineItem Payment: " + outbound.LineItems[i].Payment);
+                TotalInvoices += outbound.LineItems[i].Payment;
+                console.log("TotalInvoices: " + TotalInvoices);
+            }
+        }
+        
+        //outbound.CashPayment = outbound.CashPayment;
+        outbound.BillsCreditsSelected = TotalInvoices;
+        outbound.UnappliedPayment = outbound.BillsCreditsSelected - outbound.CashPayment;
+        if (outbound.CashPayment < outbound.BillsCreditsSelected) {
+            str += "Payment cannot be less than Invoice Total.";
+        }
+        
+        outbound.DocumentTotal = outbound.CashPayment;
+        outbound.DocumentTotalRC = outbound.DocumentTotal;
+        console.log('outbound.CashPayment: ' + outbound.CashPayment);
+        
+        //error check
+        if (str !== ""){
+           //console.log(str);
+           throw new ErrorException(str);
+        }   
+         //*****bundle stringify****************************
+        bundle.request.data = JSON.stringify(outbound);
+        console.log(bundle.request.data);
+        return bundle.request;
+
+    },
+
+//Statement****************************************************************************************************************************************
+    create_statement_pre_write: function(bundle) {
+       var outbound = JSON.parse(bundle.request.data);
+        //outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_SalesInvoice_LineItems_RowType)";
+        //Alan added 11-18-16
+        
+        
+        //error check for Company bad input
+        var str = "";
+        
+        //invoice date
+        var date;
+        if (outbound.Date === undefined) {
+            var d = moment();
+            console.log('moment: '+ d);
+            var n = d.format();
+            date = n.split('.');
+            console.log('date: '+ date);
+            outbound.Date = date[0];
+        } else {
+           outbound.Date = outbound.Date; 
+        }
+        if(outbound.BeginOfPeriod > outbound.Date){
+            str = "Please select an advanced date in 'To' field compared to 'From' field.";
+        }
+        console.log(outbound.BeginOfPeriod);
+        
+        //Customer Request
+        var companyRequest = {
+            'url': 'https://apps7.accountingsuite.com/a/' + bundle.auth_fields.tenant_id + 
+                '/odata/standard.odata/Catalog_Companies?$format=json&$filter=Description eq ' + "'" + bundle.action_fields.Company_Key + "'",
+            'headers': {
+              "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+            }, 
+            "method": "GET"
+        };
+        var companyResponse = z.request(companyRequest);
+        var JSONResponse = JSON.parse(companyResponse.content);
+       
+        if (JSONResponse.value.length > 0) {
+            outbound.Company_Key = JSONResponse.value[0].Ref_Key;
+        } else {
+            outbound.Company_Key = "";
+        }
+        
+        if (outbound.Company_Key === ""){
+            str += "The customer you entered doesn't exist. Please check 'AccountingSuite' software to find your company entry, or if needed, please use our 'Create_Company Zap' to create a new customer.";
+        }
+        
+        //Mailing Address, if the user don't select a default address.
+        if (outbound.MailingAddress_Key === undefined) {
+            var DefaultAddressRequest =  {
+                'url': "https://apps7.accountingsuite.com/a/" + bundle.auth_fields.tenant_id + 
+                    "/odata/standard.odata/Catalog_Addresses?$format=json&$filter=Description eq 'Primary' and Owner_Key eq guid'" + outbound.Company_Key + "'", 
+                'headers': {
+                  "Authorization": "Basic " + btoa(bundle.auth_fields.username + ':' + bundle.auth_fields.password)
+                }, 
+                "method": "GET"
+              };
+            var DefaultAddressResponse = z.request(DefaultAddressRequest);
+            JSONResponse = JSON.parse(DefaultAddressResponse.content); 
+            outbound.MailingAddress_Key = JSONResponse.value[0].Ref_Key;
+            console.log('default address' + outbound.MailingAddress_Key);
+        } 
+
+        //error check for Company & Product
+        if (str !== ""){
+           //console.log(str);
+           throw new ErrorException(str);
+        }
+        
+        //*****bundle stringify****************************
+        bundle.request.data = JSON.stringify(outbound);
+        console.log(bundle.request.data);
+        return bundle.request;
+    },
+
+
+//Company Post Poll
     create_company_post_poll: function(bundle) {
         
         var results = JSON.parse(bundle.response.content);
@@ -42,8 +792,8 @@ var Zap = {
         
         return results;
     },
-    
-//Cash receipt Post Write
+
+//Cash Receipt Post Write
     cash_receipt_post_write: function(bundle) {
         var results = JSON.parse(bundle.response.content);
         //console.log(results);
@@ -74,7 +824,7 @@ var Zap = {
         var create_bills_post_Response = z.request(create_bills_post_request);
     },
 
-//Bills PreWrite ****************************************************************************************************** ******************************
+//Bills PreWrite ***********************************************************************************************************************************
     create_bills_pre_write: function(bundle) {
         var outbound = JSON.parse(bundle.request.data);
         outbound['LineItems@odata.type'] = "Collection(StandardODATA.Document_PurchaseInvoice_LineItems_RowType)";
